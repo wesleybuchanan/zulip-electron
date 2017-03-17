@@ -48,8 +48,14 @@ let targetLink;
 
 // Load this url in main window
 const staticURL = 'file://' + path.join(__dirname, '../renderer', 'index.html');
+// Command line url for self-signed certificates [WIP]
+const cmdURL = process.argv[2];
 
 const targetURL = function () {
+	if (cmdURL) {
+		// db.push('/domain', cmdURL)
+		return cmdURL;
+	}
 	if (data.domain === undefined) {
 		return staticURL;
 	}
