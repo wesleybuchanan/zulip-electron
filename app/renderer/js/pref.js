@@ -50,12 +50,13 @@ window.prefDomain = function () {
 			const domain = 'https://' + newDomain;
 			const checkDomain = domain + '/static/audio/zulip.ogg';
 			request(checkDomain, (error, response) => {
+				const selfSignedErrors = ['Error: self signed certificate', 'Error: unable to verify the first certificate'];
 				if (!error && response.statusCode !== 404) {
 					document.getElementById('main').innerHTML = 'Switch';
 					document.getElementById('urladded').innerHTML = 'Switched to ' + newDomain;
 					db.push('/domain', domain);
 					ipcRenderer.send('new-domain', domain);
-				} else if (error.toString().indexOf('Error: self signed certificate') >= 0) {
+				} else if (selfSignedErrors.indexOf(error.toString()) >= 0) {
 					document.getElementById('main').innerHTML = 'Switch';
 					ipcRenderer.send('certificate-err', domain);
 					document.getElementById('urladded').innerHTML = 'Switched to ' + newDomain;

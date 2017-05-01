@@ -55,11 +55,12 @@ window.addDomain = function () {
 			const checkDomain = domain + '/static/audio/zulip.ogg';
 
 			request(checkDomain, (error, response) => {
+				const selfSignedErrors = ['Error: self signed certificate', 'Error: unable to verify the first certificate'];
 				if (!error && response.statusCode !== 404) {
 					$el.main.innerHTML = 'Connect';
 					db.push('/domain', domain);
 					ipcRenderer.send('new-domain', domain);
-				} else if (error.toString().indexOf('Error: self signed certificate') >= 0) {
+				} else if (selfSignedErrors.indexOf(error.toString()) >= 0) {
 					$el.main.innerHTML = 'Connect';
 					ipcRenderer.send('certificate-err', domain);
 				} else {
