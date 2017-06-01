@@ -19,12 +19,13 @@
     "url": "https://github.com/zulip/zulip-electron/issues"
   },
   "scripts": {
-    "start": "electron ./app/main",
+    "start": "electron app --disable-http-cache",
     "postinstall": "install-app-deps",
     "test": "gulp test && xo",
     "dev": "gulp dev",
     "pack": "build --dir",
     "dist": "build",
+    "mas": "build --mac mas",
     "build:win": "build --win nsis-web --ia32 --x64",
     "travis": "cd ./scripts && ./travis-build-test.sh"
   },
@@ -45,6 +46,7 @@
       "description": "Zulip Desktop Client for Linux",
       "target": [
         "deb",
+        "zip",
         "AppImage"
       ],
       "maintainer": "Akash Nimare <svnitakash@gmail.com>"
@@ -73,7 +75,7 @@
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico"
-      },
+    },
     "nsis": {
       "perMachine": true,
       "oneClick": false
@@ -90,19 +92,21 @@
   "devDependencies": {
     "assert": "1.4.1",
     "devtron": "1.4.0",
-    "electron-builder": "16.6.0",
-    "electron": "1.4.15",
+    "electron-builder": "17.10.0",
+    "electron": "1.6.8",
     "electron-connect": "0.4.8",
     "gulp": "3.9.1",
     "gulp-mocha": "3.0.1",
-    "spectron": "3.6.1",
+    "chai-as-promised": "6.0.0",
+    "chai": "^3.5.0",
+    "spectron": "3.6.4",
     "xo": "0.18.1"
   },
   "xo": {
     "esnext": true,
     "overrides": [
       {
-        "files": "app/main/*.js",
+        "files": "app*/**/*.js",
         "rules": {
           "max-lines": [
             "warn",
@@ -111,6 +115,10 @@
           "no-warning-comments": 0,
           "capitalized-comments": 0,
           "no-else-return": 0,
+          "no-path-concat": 0,
+          "no-alert": 0,
+          "guard-for-in": 0,
+          "prefer-promise-reject-errors": 0,
           "import/no-unresolved": 0,
           "import/no-extraneous-dependencies": 0
         }
