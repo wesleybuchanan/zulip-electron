@@ -16,6 +16,8 @@ const iconPath = () => {
 	return APP_ICON + (process.platform === 'win32' ? 'win.ico' : 'osx.png');
 };
 
+var flashTimer;
+
 let unread = 0;
 
 const trayIconSize = () => {
@@ -168,14 +170,28 @@ ipcRenderer.on('tray', (event, arg) => {
 		// Message Count // console.log("message count is zero.");
 		window.tray.setImage(iconPath());
 		window.tray.setToolTip('No unread messages');
+		remote.getCurrentWindow().flashFrame(false);
+		console.log("stopping flashing");
+		clearInterval(flashTimer);
 	} else {
 		unread = arg;
 		renderNativeImage(arg).then(image => {
 			window.tray.setImage(image);
 			window.tray.setToolTip(arg + ' unread messages');
 		});
+		console.log("starting flash");
+		remote.getCurrentWindow().flashFrame(true);
+		flashTimer = setInterval(continueFlashing, 5000);
 	}
 });
+
+function continueFlashing(){
+	if (remote.getCurrentWindow().isFocused() == true)	{
+		clearInterval(flashTimer);
+	} else {
+		remote.getCurrentWindow().flashFrame(true);
+	}
+}
 
 ipcRenderer.on('toggletray', event => {
 	if (event) {
