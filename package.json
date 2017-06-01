@@ -6,7 +6,7 @@
   "description": "Zulip Desktop App",
   "license": "Apache-2.0",
   "email": "<svnitakash@gmail.com>",
-  "copyright": "Â©2017 Kandra Labs, Inc.",
+  "copyright": "©2017 Kandra Labs, Inc.",
   "author": {
     "name": "Akash Nimare",
     "email": "svnitakash@gmail.com"
@@ -35,7 +35,7 @@
       "**/*",
       "!node_modules/@paulcbetts/cld/deps/cld${/*}"
     ],
-    "copyright": "Â©2017 Kandra Labs, Inc.",
+    "copyright": "©2017 Kandra Labs, Inc.",
     "mac": {
       "category": "public.app-category.productivity"
     },
