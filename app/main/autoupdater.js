@@ -39,7 +39,7 @@ function appUpdater() {
 		});
 	});
 	// Init for updates
-	autoUpdater.checkForUpdates();
+	// autoUpdater.checkForUpdates();
 }
 
 module.exports = {
