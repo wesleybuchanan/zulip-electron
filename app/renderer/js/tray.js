@@ -126,6 +126,15 @@ const createTray = function () {
 		type: 'separator'
 	},
 	{
+		label: 'Focus',
+		click() {
+			ipcRenderer.send('focus-app');
+		}
+	},
+	{
+		type: 'separator'
+	},
+	{
 		label: 'Manage Zulip servers',
 		click() {
 			sendAction('open-settings');
@@ -146,7 +155,7 @@ const createTray = function () {
 	{
 		label: 'Quit',
 		click() {
-			remote.getCurrentWindow().close();
+			ipcRenderer.send('quit-app');
 		}
 	}
 	]);
