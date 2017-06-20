@@ -119,7 +119,7 @@ const createTray = function () {
 	const contextMenu = Menu.buildFromTemplate([{
 		label: 'About',
 		click() {
-			ipcRenderer.send('trayabout');
+			sendAction('open-about');
 		}
 	},
 	{
@@ -138,15 +138,6 @@ const createTray = function () {
 		label: 'Manage Zulip servers',
 		click() {
 			sendAction('open-settings');
-		}
-	},
-	{
-		type: 'separator'
-	},
-	{
-		label: 'Reload',
-		click() {
-			sendAction('reload');
 		}
 	},
 	{
