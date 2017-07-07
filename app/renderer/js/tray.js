@@ -9,6 +9,8 @@ const {Tray, Menu, nativeImage, BrowserWindow} = remote;
 
 const APP_ICON = path.join(__dirname, '../../resources/tray', 'tray');
 
+const ConfigUtil = require(__dirname + '/utils/config-util.js');
+
 const iconPath = () => {
 	if (process.platform === 'linux') {
 		return APP_ICON + 'linux.png';
@@ -45,7 +47,8 @@ const config = {
 
 const renderCanvas = function (arg) {
 	config.unreadCount = arg;
-	return new Promise((resolve, reject) => {
+
+	return new Promise(resolve => {
 		const SIZE = config.size * config.pixelRatio;
 		const PADDING = SIZE * 0.05;
 		const CENTER = SIZE / 2;
@@ -83,8 +86,6 @@ const renderCanvas = function (arg) {
 			}
 
 			resolve(canvas);
-		} else {
-			reject(canvas);
 		}
 	});
 };
@@ -161,6 +162,10 @@ const createTray = function () {
 };
 
 ipcRenderer.on('destroytray', event => {
+	if (!window.tray) {
+		return;
+	}
+
 	window.tray.destroy();
 	if (window.tray.isDestroyed()) {
 		window.tray = null;
@@ -172,12 +177,15 @@ ipcRenderer.on('destroytray', event => {
 });
 
 ipcRenderer.on('tray', (event, arg) => {
+	if (!window.tray) {
+		return;
+	}
+
 	if (arg === 0) {
 		unread = arg;
 		// Message Count // console.log("message count is zero.");
 		window.tray.setImage(iconPath());
 		window.tray.setToolTip('No unread messages');
-		remote.getCurrentWindow().flashFrame(false);
 		remote.getCurrentWindow().flashFrame(false);
 	} else {
 		unread = arg;
@@ -190,22 +198,25 @@ ipcRenderer.on('tray', (event, arg) => {
 	}
 });
 
-
-ipcRenderer.on('toggletray', event => {
-	if (event) {
-		if (window.tray) {
-			window.tray.destroy();
-			if (window.tray.isDestroyed()) {
-				window.tray = null;
-			}
-		} else {
-			createTray();
-			renderNativeImage(unread).then(image => {
-				window.tray.setImage(image);
-				window.tray.setToolTip(unread + ' unread messages');
-			});
+function toggleTray() {
+	if (window.tray) {
+		window.tray.destroy();
+		if (window.tray.isDestroyed()) {
+			window.tray = null;
 		}
+		ConfigUtil.setConfigItem('trayIcon', false);
+	} else {
+		createTray();
+		renderNativeImage(unread).then(image => {
+			window.tray.setImage(image);
+			window.tray.setToolTip(unread + ' unread messages');
+		});
+		ConfigUtil.setConfigItem('trayIcon', true);
 	}
-});
+}
 
-createTray();
+ipcRenderer.on('toggletray', toggleTray);
+
+if (ConfigUtil.getConfigItem('trayIcon', true)) {
+	createTray();
+}

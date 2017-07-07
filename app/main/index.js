@@ -162,7 +162,7 @@ app.on('ready', () => {
 	electronLocalshortcut.register(mainWindow, 'CommandOrControl+R', () => {
 		// page.send('reload');
 		mainWindow.reload();
-		// page.send('destroytray');
+		page.send('destroytray');
 	});
 
 	electronLocalshortcut.register(mainWindow, 'CommandOrControl+[', () => {
@@ -214,6 +214,10 @@ app.on('ready', () => {
 			app.setBadgeCount(messageCount);
 		}
 		page.send('tray', messageCount);
+	});
+
+	ipc.on('forward', (event, listener) => {
+		page.send(listener);
 	});
 });
 
