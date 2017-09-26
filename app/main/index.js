@@ -86,6 +86,9 @@ function createMainWindow() {
 				win.hide();
 			}
 		}
+
+	// Unregister all the shortcuts so that they don't interfare with other apps
+		electronLocalshortcut.unregisterAll(mainWindow);
 	});
 
 	win.setTitle('Zulip');
@@ -135,6 +138,23 @@ function createMainWindow() {
 	return win;
 }
 
+function registerLocalShortcuts(page) {
+	// TODO - use global shortcut instead
+	electronLocalshortcut.register(mainWindow, 'CommandOrControl+R', () => {
+		// page.send('reload');
+		mainWindow.reload();
+		page.send('destroytray');
+	});
+
+	electronLocalshortcut.register(mainWindow, 'CommandOrControl+[', () => {
+		page.send('back');
+	});
+
+	electronLocalshortcut.register(mainWindow, 'CommandOrControl+]', () => {
+		page.send('forward');
+	});
+}
+
 // eslint-disable-next-line max-params
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
 	event.preventDefault();
@@ -158,20 +178,7 @@ app.on('ready', () => {
 
 	const page = mainWindow.webContents;
 
-	// TODO - use global shortcut instead
-	electronLocalshortcut.register(mainWindow, 'CommandOrControl+R', () => {
-		// page.send('reload');
-		mainWindow.reload();
-		page.send('destroytray');
-	});
-
-	electronLocalshortcut.register(mainWindow, 'CommandOrControl+[', () => {
-		page.send('back');
-	});
-
-	electronLocalshortcut.register(mainWindow, 'CommandOrControl+]', () => {
-		page.send('forward');
-	});
+	registerLocalShortcuts(page);
 
 	page.on('dom-ready', () => {
 		mainWindow.show();
@@ -186,7 +193,7 @@ app.on('ready', () => {
 	});
 	electron.powerMonitor.on('resume', () => {
 		mainWindow.reload();
-		mainWindow.webContents.send('destroytray');
+		page.send('destroytray');
 	});
 
 	ipc.on('focus-app', () => {
@@ -199,6 +206,9 @@ app.on('ready', () => {
 
 	ipc.on('reload-main', () => {
 		page.reload();
+		page.send('destroytray');
+		electronLocalshortcut.unregisterAll(mainWindow);
+		registerLocalShortcuts(page);
 	});
 
 	ipc.on('toggle-app', () => {
@@ -216,8 +226,16 @@ app.on('ready', () => {
 		page.send('tray', messageCount);
 	});
 
-	ipc.on('forward', (event, listener) => {
+	ipc.on('forward-message', (event, listener, ...params) => {
+		console.log(listener, ...params);
 		page.send(listener);
+	});
+
+	ipc.on('register-server-tab-shortcut', (event, index) => {
+		electronLocalshortcut.register(mainWindow, `CommandOrControl+${index}`, () => {
+			// Array index == Shown index - 1
+			page.send('switch-server-tab', index - 1);
+		});
 	});
 });
 

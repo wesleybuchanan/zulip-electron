@@ -10,11 +10,11 @@ const FunctionalTab = require(__dirname + '/js/components/functional-tab.js');
 
 class ServerManagerView {
 	constructor() {
+		this.$addServerButton = document.getElementById('add-tab');
 		this.$tabsContainer = document.getElementById('tabs-container');
 
 		const $actionsContainer = document.getElementById('actions-container');
 		this.$reloadButton = $actionsContainer.querySelector('#reload-action');
-		this.$addServerButton = $actionsContainer.querySelector('#add-action');
 		this.$settingsButton = $actionsContainer.querySelector('#settings-action');
 		this.$content = document.getElementById('content');
 
@@ -37,7 +37,7 @@ class ServerManagerView {
 			}
 			this.activateTab(0);
 		} else {
-			this.openSettings();
+			this.openSettings('Servers');
 		}
 	}
 
@@ -46,6 +46,7 @@ class ServerManagerView {
 			icon: server.icon,
 			$root: this.$tabsContainer,
 			onClick: this.activateTab.bind(this, index),
+			index,
 			webview: new WebView({
 				$root: this.$content,
 				index,
@@ -66,8 +67,12 @@ class ServerManagerView {
 		this.$reloadButton.addEventListener('click', () => {
 			this.tabs[this.activeTabIndex].webview.reload();
 		});
-		this.$addServerButton.addEventListener('click', this.openSettings.bind(this));
-		this.$settingsButton.addEventListener('click', this.openSettings.bind(this));
+		this.$addServerButton.addEventListener('click', () => {
+			this.openSettings('Servers');
+		});
+		this.$settingsButton.addEventListener('click', () => {
+			this.openSettings('General');
+		});
 	}
 
 	openFunctionalTab(tabProps) {
@@ -101,12 +106,13 @@ class ServerManagerView {
 		this.activateTab(this.functionalTabs[tabProps.name]);
 	}
 
-	openSettings() {
+	openSettings(nav = 'General') {
 		this.openFunctionalTab({
 			name: 'Settings',
 			materialIcon: 'settings',
-			url: `file://${__dirname}/preference.html`
+			url: `file://${__dirname}/preference.html#${nav}`
 		});
+		this.tabs[this.functionalTabs.Settings].webview.send('switch-settings-nav', nav);
 	}
 
 	openAbout() {
@@ -194,8 +200,13 @@ class ServerManagerView {
 			});
 		}
 
-		ipcRenderer.on('open-settings', this.openSettings.bind(this));
+		ipcRenderer.on('open-settings', (event, settingNav) => {
+			this.openSettings(settingNav);
+		});
 		ipcRenderer.on('open-about', this.openAbout.bind(this));
+		ipcRenderer.on('switch-server-tab', (event, index) => {
+			this.activateTab(index);
+		});
 	}
 }
 
