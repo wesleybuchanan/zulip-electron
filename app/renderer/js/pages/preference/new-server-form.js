@@ -11,28 +11,15 @@ class NewServerForm extends BaseComponent {
 
 	template() {
 		return `
-			<div class="settings-card" style="border: solid 1px #4CAF50;">
-				<div class="server-info-left">
-					<img class="server-info-icon" src="${__dirname + '../../../../img/icon.png'}"/>
-				</div>
+			<div class="settings-card">
 				<div class="server-info-right">
 					<div class="server-info-row">
-						<span class="server-info-key">Name</span>
-						<input class="server-info-value" placeholder="(Required)"/>
+						<input class="setting-input-value" autofocus placeholder="Enter the URL of your Zulip organization..."/>
 					</div>
 					<div class="server-info-row">
-						<span class="server-info-key">Url</span>
-						<input class="server-info-value" placeholder="(Required)"/>
-					</div>
-					<div class="server-info-row">
-						<span class="server-info-key">Icon</span>
-						<input class="server-info-value" placeholder="(Optional)"/>
-					</div>
-					<div class="server-info-row">
-						<span class="server-info-key"></span>
-						<div class="action green server-save-action">
+						<div class="action blue server-save-action">
 							<i class="material-icons">check_box</i>
-							<span>Save</span>
+							<span>Add</span>
 						</div>
 					</div>
 				</div>
@@ -51,25 +38,29 @@ class NewServerForm extends BaseComponent {
 		this.props.$root.innerHTML = '';
 		this.props.$root.appendChild(this.$newServerForm);
 
-		this.$newServerAlias = this.$newServerForm.querySelectorAll('input.server-info-value')[0];
-		this.$newServerUrl = this.$newServerForm.querySelectorAll('input.server-info-value')[1];
-		this.$newServerIcon = this.$newServerForm.querySelectorAll('input.server-info-value')[2];
+		this.$newServerUrl = this.$newServerForm.querySelectorAll('input.setting-input-value')[0];
+	}
+
+	submitFormHandler() {
+		DomainUtil.checkDomain(this.$newServerUrl.value).then(serverConf => {
+			DomainUtil.addDomain(serverConf).then(() => {
+				this.props.onChange(this.props.index);
+			});
+		}, errorMessage => {
+			alert(errorMessage);
+		});
 	}
 
 	initActions() {
 		this.$saveServerButton.addEventListener('click', () => {
-			DomainUtil.checkDomain(this.$newServerUrl.value).then(domain => {
-				const server = {
-					alias: this.$newServerAlias.value,
-					url: domain,
-					icon: this.$newServerIcon.value
-				};
-				DomainUtil.addDomain(server).then(() => {
-					this.props.onChange(this.props.index);
-				});
-			}, errorMessage => {
-				alert(errorMessage);
-			});
+			this.submitFormHandler();
+		});
+		this.$newServerUrl.addEventListener('keypress', event => {
+			const EnterkeyCode = event.keyCode;
+			// Submit form when Enter key is pressed
+			if (EnterkeyCode === 13) {
+				this.submitFormHandler();
+			}
 		});
 	}
 }

@@ -1,5 +1,6 @@
 'use strict';
 const {dialog} = require('electron').remote;
+const {ipcRenderer} = require('electron');
 
 const BaseComponent = require(__dirname + '/../../components/base.js');
 const DomainUtil = require(__dirname + '/../../utils/domain-util.js');
@@ -18,19 +19,13 @@ class ServerInfoForm extends BaseComponent {
 				</div>
 				<div class="server-info-right">
 					<div class="server-info-row">
-						<span class="server-info-key">Name</span>
-						<input class="server-info-value" disabled value="${this.props.server.alias}"/>
+						<span class="server-info-alias">${this.props.server.alias}</span>
+						<i class="material-icons open-tab-button">open_in_new</i>						
 					</div>
 					<div class="server-info-row">
-						<span class="server-info-key">Url</span>
-						<input class="server-info-value" disabled value="${this.props.server.url}"/>
+						<input class="setting-input-value" disabled value="${this.props.server.url}"/>
 					</div>
 					<div class="server-info-row">
-						<span class="server-info-key">Icon</span>
-						<input class="server-info-value" disabled value="${this.props.server.icon}"/>
-					</div>
-					<div class="server-info-row">
-						<span class="server-info-key"></span>
 						<div class="action red server-delete-action">
 							<i class="material-icons">indeterminate_check_box</i>
 							<span>Delete</span>
@@ -48,7 +43,9 @@ class ServerInfoForm extends BaseComponent {
 
 	initForm() {
 		this.$serverInfoForm = this.generateNodeFromTemplate(this.template());
+		this.$serverInfoAlias = this.$serverInfoForm.getElementsByClassName('server-info-alias')[0];
 		this.$deleteServerButton = this.$serverInfoForm.getElementsByClassName('server-delete-action')[0];
+		this.$openServerButton = this.$serverInfoForm.getElementsByClassName('open-tab-button')[0];
 		this.props.$root.appendChild(this.$serverInfoForm);
 	}
 
@@ -65,6 +62,14 @@ class ServerInfoForm extends BaseComponent {
 					this.props.onChange(this.props.index);
 				}
 			});
+		});
+
+		this.$openServerButton.addEventListener('click', () => {
+			ipcRenderer.send('forward-message', 'switch-server-tab', this.props.index);
+		});
+
+		this.$serverInfoAlias.addEventListener('click', () => {
+			ipcRenderer.send('forward-message', 'switch-server-tab', this.props.index);
 		});
 	}
 }

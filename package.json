@@ -1,14 +1,14 @@
 {
   "name": "zulip",
   "productName": "Zulip",
-  "version": "1.2.0-beta1",
+  "version": "1.4.0-1",
   "main": "./app/main",
   "description": "Zulip Desktop App",
   "license": "Apache-2.0",
   "email": "<svnitakash@gmail.com>",
   "copyright": "©2017 Kandra Labs, Inc.",
   "author": {
-    "name": "Akash Nimare",
+    "name": "Kandra Labs, Inc.",
     "email": "svnitakash@gmail.com"
   },
   "repository": {
@@ -20,15 +20,18 @@
   },
   "scripts": {
     "start": "electron app --disable-http-cache",
-    "postinstall": "install-app-deps",
+    "reinstall": "rm -rf node_modules; rm -rf app/node_modules; npm install",
+    "postinstall": "electron-builder install-app-deps",
     "test": "xo",
     "dev": "gulp dev",
-    "pack": "build --dir",
-    "dist": "build",
-    "mas": "build --mac mas",
-    "build:win": "build --win nsis-web --ia32 --x64",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "mas": "electron-builder --mac mas",
     "travis": "cd ./scripts && ./travis-build-test.sh"
   },
+  "pre-commit": [
+    "test"
+  ],
   "build": {
     "appId": "org.zulip.zulip-electron",
     "asar": true,
@@ -42,7 +45,7 @@
       "category": "public.app-category.productivity"
     },
     "linux": {
-      "category": "",
+      "category": "Chat;GNOME;GTK;Network;InstantMessaging",
       "packageCategory": "GNOME;GTK;Network;InstantMessaging",
       "description": "Zulip Desktop Client for Linux",
       "target": [
@@ -74,12 +77,22 @@
       ]
     },
     "win": {
-      "target": "nsis",
-      "icon": "build/icon.ico"
+      "target": [
+        {
+          "target": "nsis-web",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "publisherName": "Kandra Labs, Inc."
     },
     "nsis": {
       "perMachine": true,
-      "oneClick": false
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   },
   "keywords": [
@@ -93,15 +106,16 @@
   "devDependencies": {
     "assert": "1.4.1",
     "devtron": "1.4.0",
-    "electron-builder": "17.10.0",
-    "electron": "1.6.8",
-    "electron-connect": "0.4.8",
+    "electron-builder": "19.29.1",
+    "electron": "1.6.11",
+    "electron-connect": "0.6.2",
     "gulp": "3.9.1",
-    "gulp-mocha": "3.0.1",
-    "chai-as-promised": "6.0.0",
-    "chai": "^3.5.0",
-    "spectron": "3.6.4",
-    "xo": "0.18.1"
+    "gulp-mocha": "4.3.1",
+    "chai-as-promised": "7.1.1",
+    "chai": "4.1.1",
+    "spectron": "3.7.2",
+    "xo": "0.18.2",
+    "pre-commit": "1.2.2"
   },
   "xo": {
     "parserOptions": {
@@ -120,6 +134,7 @@
             500
           ],
           "no-warning-comments": 0,
+          "object-curly-spacing": 0,
           "capitalized-comments": 0,
           "no-else-return": 0,
           "no-path-concat": 0,
@@ -127,7 +142,8 @@
           "guard-for-in": 0,
           "prefer-promise-reject-errors": 0,
           "import/no-unresolved": 0,
-          "import/no-extraneous-dependencies": 0
+          "import/no-extraneous-dependencies": 0,
+          "no-prototype-builtins": 0
         }
       }
     ],

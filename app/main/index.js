@@ -1,23 +1,24 @@
 'use strict';
 const path = require('path');
 const electron = require('electron');
-const {app} = require('electron');
-const ipc = require('electron').ipcMain;
 const electronLocalshortcut = require('electron-localshortcut');
-const Configstore = require('electron-config');
-const isDev = require('electron-is-dev');
+const windowStateKeeper = require('electron-window-state');
 const appMenu = require('./menu');
-const {appUpdater} = require('./autoupdater');
+const { appUpdater } = require('./autoupdater');
+const { crashHandler } = require('./crash-reporter');
+
+const { setAutoLaunch } = require('./startup');
+
+const { app, ipcMain } = electron;
+
+const BadgeSettings = require('./../renderer/js/pages/preference/badge-settings.js');
 
 // Adds debug features like hotkeys for triggering dev tools and reload
 require('electron-debug')();
 
-const conf = new Configstore();
-
-// Setting userAgent so that server-side code can identify the desktop app
-
 // Prevent window being garbage collected
 let mainWindow;
+let badgeCount;
 
 let isQuitting = false;
 
@@ -38,10 +39,6 @@ if (isAlreadyRunning) {
 	return app.quit();
 }
 
-function isWindowsOrmacOS() {
-	return process.platform === 'darwin' || process.platform === 'win32';
-}
-
 const APP_ICON = path.join(__dirname, '../resources', 'Icon');
 
 const iconPath = () => {
@@ -49,12 +46,23 @@ const iconPath = () => {
 };
 
 function createMainWindow() {
+	// Load the previous state with fallback to defaults
+	const mainWindowState = windowStateKeeper({
+		defaultWidth: 1000,
+		defaultHeight: 600
+	});
+
+	// Let's keep the window position global so that we can access it in other process
+	global.mainWindowState = mainWindowState;
+
 	const win = new electron.BrowserWindow({
 		// This settings needs to be saved in config
 		title: 'Zulip',
-		width: conf.get('width') || 1000,
-		height: conf.get('height') || 600,
 		icon: iconPath(),
+		x: mainWindowState.x,
+		y: mainWindowState.y,
+		width: mainWindowState.width,
+		height: mainWindowState.height,
 		minWidth: 600,
 		minHeight: 500,
 		webPreferences: {
@@ -87,45 +95,18 @@ function createMainWindow() {
 			}
 		}
 
-	// Unregister all the shortcuts so that they don't interfare with other apps
+		// Unregister all the shortcuts so that they don't interfare with other apps
 		electronLocalshortcut.unregisterAll(mainWindow);
 	});
 
 	win.setTitle('Zulip');
 
-	// Let's save browser window position
-	if (conf.get('x') || conf.get('y')) {
-		win.setPosition(conf.get('x'), conf.get('y'));
-	}
-
-	if (conf.get('maximize')) {
-		win.maximize();
-	}
-
-	// Handle sizing events so we can persist them.
-	win.on('maximize', () => {
-		conf.set('maximize', true);
+	win.on('enter-full-screen', () => {
+		win.webContents.send('enter-fullscreen');
 	});
 
-	win.on('unmaximize', () => {
-		conf.set('maximize', false);
-	});
-
-	win.on('resize', function () {
-		const size = this.getSize();
-		conf.set({
-			width: size[0],
-			height: size[1]
-		});
-	});
-
-	// On osx it's 'moved'
-	win.on('move', function () {
-		const pos = this.getPosition();
-		conf.set({
-			x: pos[0],
-			y: pos[1]
-		});
+	win.on('leave-full-screen', () => {
+		win.webContents.send('leave-fullscreen');
 	});
 
 	//  To destroy tray icon when navigate to a new URL
@@ -135,17 +116,21 @@ function createMainWindow() {
 		}
 	});
 
+	// Let us register listeners on the window, so we can update the state
+	// automatically (the listeners will be removed when the window is closed)
+	// and restore the maximized or full screen state
+	mainWindowState.manage(win);
+
 	return win;
 }
 
 function registerLocalShortcuts(page) {
-	// TODO - use global shortcut instead
+	// Somehow, reload action cannot be overwritten by the menu item
 	electronLocalshortcut.register(mainWindow, 'CommandOrControl+R', () => {
-		// page.send('reload');
-		mainWindow.reload();
-		page.send('destroytray');
+		page.send('reload-viewer');
 	});
 
+	// Also adding these shortcuts because some users might want to use it instead of CMD/Left-Right
 	electronLocalshortcut.register(mainWindow, 'CommandOrControl+[', () => {
 		page.send('back');
 	});
@@ -173,7 +158,9 @@ app.on('activate', () => {
 });
 
 app.on('ready', () => {
-	electron.Menu.setApplicationMenu(appMenu);
+	appMenu.setMenu({
+		tabs: []
+	});
 	mainWindow = createMainWindow();
 
 	const page = mainWindow.webContents;
@@ -185,33 +172,36 @@ app.on('ready', () => {
 	});
 
 	page.once('did-frame-finish-load', () => {
-		const checkOS = isWindowsOrmacOS();
-		if (checkOS && !isDev) {
-			// Initate auto-updates on MacOS and Windows
-			appUpdater();
-		}
+		// Initate auto-updates on MacOS and Windows
+		appUpdater();
+		crashHandler();
 	});
+
 	electron.powerMonitor.on('resume', () => {
+		page.send('reload-viewer');
+	});
+
+	ipcMain.on('focus-app', () => {
+		mainWindow.show();
+	});
+
+	ipcMain.on('quit-app', () => {
+		app.quit();
+	});
+
+	// Reload full app not just webview, useful in debugging
+	ipcMain.on('reload-full-app', () => {
 		mainWindow.reload();
 		page.send('destroytray');
 	});
 
-	ipc.on('focus-app', () => {
-		mainWindow.show();
+	ipcMain.on('clear-app-settings', () => {
+		global.mainWindowState.unmanage(mainWindow);
+		app.relaunch();
+		app.exit();
 	});
 
-	ipc.on('quit-app', () => {
-		app.quit();
-	});
-
-	ipc.on('reload-main', () => {
-		page.reload();
-		page.send('destroytray');
-		electronLocalshortcut.unregisterAll(mainWindow);
-		registerLocalShortcuts(page);
-	});
-
-	ipc.on('toggle-app', () => {
+	ipcMain.on('toggle-app', () => {
 		if (mainWindow.isVisible()) {
 			mainWindow.hide();
 		} else {
@@ -219,23 +209,45 @@ app.on('ready', () => {
 		}
 	});
 
-	ipc.on('update-badge', (event, messageCount) => {
-		if (process.platform === 'darwin') {
-			app.setBadgeCount(messageCount);
-		}
+	ipcMain.on('toggle-badge-option', () => {
+		BadgeSettings.updateBadge(badgeCount, mainWindow);
+	});
+
+	ipcMain.on('update-badge', (event, messageCount) => {
+		badgeCount = messageCount;
+		BadgeSettings.updateBadge(badgeCount, mainWindow);
 		page.send('tray', messageCount);
 	});
 
-	ipc.on('forward-message', (event, listener, ...params) => {
-		console.log(listener, ...params);
-		page.send(listener);
+	ipcMain.on('update-taskbar-icon', (event, data, text) => {
+		BadgeSettings.updateTaskbarIcon(data, text, mainWindow);
 	});
 
-	ipc.on('register-server-tab-shortcut', (event, index) => {
+	ipcMain.on('forward-message', (event, listener, ...params) => {
+		page.send(listener, ...params);
+	});
+
+	ipcMain.on('update-menu', (event, props) => {
+		appMenu.setMenu(props);
+	});
+
+	ipcMain.on('register-server-tab-shortcut', (event, index) => {
 		electronLocalshortcut.register(mainWindow, `CommandOrControl+${index}`, () => {
 			// Array index == Shown index - 1
 			page.send('switch-server-tab', index - 1);
 		});
+	});
+
+	ipcMain.on('local-shortcuts', (event, enable) => {
+		if (enable) {
+			registerLocalShortcuts(page);
+		} else {
+			electronLocalshortcut.unregisterAll(mainWindow);
+		}
+	});
+
+	ipcMain.on('toggleAutoLauncher', (event, AutoLaunchValue) => {
+		setAutoLaunch(AutoLaunchValue);
 	});
 });
 
@@ -246,4 +258,10 @@ app.on('will-quit', () => {
 
 app.on('before-quit', () => {
 	isQuitting = true;
+});
+
+// Send crash reports
+process.on('uncaughtException', err => {
+	console.error(err);
+	console.error(err.stack);
 });

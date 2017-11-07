@@ -180,21 +180,21 @@ ipcRenderer.on('tray', (event, arg) => {
 	if (!window.tray) {
 		return;
 	}
-
-	if (arg === 0) {
-		unread = arg;
-		// Message Count // console.log("message count is zero.");
-		window.tray.setImage(iconPath());
-		window.tray.setToolTip('No unread messages');
-		remote.getCurrentWindow().flashFrame(false);
-	} else {
-		unread = arg;
-		renderNativeImage(arg).then(image => {
-			window.tray.setImage(image);
-			window.tray.setToolTip(arg + ' unread messages');
-		});
-		
-		remote.getCurrentWindow().flashFrame(!remote.getCurrentWindow().isFocused());
+	// We don't want to create tray from unread messages on macOS since it already has dock badges.
+	if (process.platform === 'linux' || process.platform === 'win32') {
+		if (arg === 0) {
+			unread = arg;
+			window.tray.setImage(iconPath());
+			window.tray.setToolTip('No unread messages');
+	                remote.getCurrentWindow().flashFrame(false);
+		} else {
+			unread = arg;
+			renderNativeImage(arg).then(image => {
+				window.tray.setImage(image);
+				window.tray.setToolTip(arg + ' unread messages');
+			});
+			remote.getCurrentWindow().flashFrame(!remote.getCurrentWindow().isFocused());
+		}
 	}
 });
 
@@ -207,10 +207,12 @@ function toggleTray() {
 		ConfigUtil.setConfigItem('trayIcon', false);
 	} else {
 		createTray();
-		renderNativeImage(unread).then(image => {
-			window.tray.setImage(image);
-			window.tray.setToolTip(unread + ' unread messages');
-		});
+		if (process.platform === 'linux' || process.platform === 'win32') {
+			renderNativeImage(unread).then(image => {
+				window.tray.setImage(image);
+				window.tray.setToolTip(unread + ' unread messages');
+			});
+		}
 		ConfigUtil.setConfigItem('trayIcon', true);
 	}
 }

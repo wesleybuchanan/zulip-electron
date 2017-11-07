@@ -1,12 +1,15 @@
 'use strict';
 
 require(__dirname + '/js/tray.js');
-const {ipcRenderer} = require('electron');
+const { ipcRenderer, remote } = require('electron');
+
+const { session } = remote;
 
 const DomainUtil = require(__dirname + '/js/utils/domain-util.js');
 const WebView = require(__dirname + '/js/components/webview.js');
 const ServerTab = require(__dirname + '/js/components/server-tab.js');
 const FunctionalTab = require(__dirname + '/js/components/functional-tab.js');
+const ConfigUtil = require(__dirname + '/js/utils/config-util.js');
 
 class ServerManagerView {
 	constructor() {
@@ -16,7 +19,15 @@ class ServerManagerView {
 		const $actionsContainer = document.getElementById('actions-container');
 		this.$reloadButton = $actionsContainer.querySelector('#reload-action');
 		this.$settingsButton = $actionsContainer.querySelector('#settings-action');
-		this.$content = document.getElementById('content');
+		this.$webviewsContainer = document.getElementById('webviews-container');
+
+		this.$reloadTooltip = $actionsContainer.querySelector('#reload-tooltip');
+		this.$settingsTooltip = $actionsContainer.querySelector('#setting-tooltip');
+		this.$sidebar = document.getElementById('sidebar');
+
+		this.$fullscreenPopup = document.getElementById('fullscreen-popup');
+		this.$fullscreenEscapeKey = process.platform === 'darwin' ? '^⌘F' : 'F11';
+		this.$fullscreenPopup.innerHTML = `Press ${this.$fullscreenEscapeKey} to exit full screen`;
 
 		this.activeTabIndex = -1;
 		this.tabs = [];
@@ -24,9 +35,36 @@ class ServerManagerView {
 	}
 
 	init() {
-		this.initTabs();
-		this.initActions();
-		this.registerIpcs();
+		this.loadProxy().then(() => {
+			this.initSidebar();
+			this.initTabs();
+			this.initActions();
+			this.registerIpcs();
+		});
+	}
+
+	loadProxy() {
+		return new Promise(resolve => {
+			const proxyEnabled = ConfigUtil.getConfigItem('useProxy', false);
+			if (proxyEnabled) {
+				session.fromPartition('persist:webviewsession').setProxy({
+					pacScript: ConfigUtil.getConfigItem('proxyPAC', ''),
+					proxyRules: ConfigUtil.getConfigItem('proxyRules', ''),
+					proxyBypassRules: ConfigUtil.getConfigItem('proxyBypass', '')
+				}, resolve);
+			} else {
+				session.fromPartition('persist:webviewsession').setProxy({
+					pacScript: '',
+					proxyRules: '',
+					proxyBypassRules: ''
+				}, resolve);
+			}
+		});
+	}
+
+	initSidebar() {
+		const showSidebar = ConfigUtil.getConfigItem('showSidebar', true);
+		this.toggleSidebar(showSidebar);
 	}
 
 	initTabs() {
@@ -34,21 +72,26 @@ class ServerManagerView {
 		if (servers.length > 0) {
 			for (let i = 0; i < servers.length; i++) {
 				this.initServer(servers[i], i);
+				DomainUtil.updateSavedServer(servers[i].url, i);
+				this.activateTab(i);
 			}
 			this.activateTab(0);
 		} else {
 			this.openSettings('Servers');
 		}
+
+		ipcRenderer.send('local-shortcuts', true);
 	}
 
 	initServer(server, index) {
 		this.tabs.push(new ServerTab({
+			role: 'server',
 			icon: server.icon,
 			$root: this.$tabsContainer,
 			onClick: this.activateTab.bind(this, index),
 			index,
 			webview: new WebView({
-				$root: this.$content,
+				$root: this.$webviewsContainer,
 				index,
 				url: server.url,
 				name: server.alias,
@@ -73,6 +116,18 @@ class ServerManagerView {
 		this.$settingsButton.addEventListener('click', () => {
 			this.openSettings('General');
 		});
+
+		this.sidebarHoverEvent(this.$settingsButton, this.$settingsTooltip);
+		this.sidebarHoverEvent(this.$reloadButton, this.$reloadTooltip);
+	}
+
+	sidebarHoverEvent(SidebarButton, SidebarTooltip) {
+		SidebarButton.addEventListener('mouseover', () => {
+			SidebarTooltip.removeAttribute('style');
+		});
+		SidebarButton.addEventListener('mouseout', () => {
+			SidebarTooltip.style.display = 'none';
+		});
 	}
 
 	openFunctionalTab(tabProps) {
@@ -84,12 +139,14 @@ class ServerManagerView {
 		this.functionalTabs[tabProps.name] = this.tabs.length;
 
 		this.tabs.push(new FunctionalTab({
+			role: 'function',
 			materialIcon: tabProps.materialIcon,
 			$root: this.$tabsContainer,
+			index: this.functionalTabs[tabProps.name],
 			onClick: this.activateTab.bind(this, this.functionalTabs[tabProps.name]),
 			onDestroy: this.destroyTab.bind(this, tabProps.name, this.functionalTabs[tabProps.name]),
 			webview: new WebView({
-				$root: this.$content,
+				$root: this.$webviewsContainer,
 				index: this.functionalTabs[tabProps.name],
 				url: tabProps.url,
 				name: tabProps.name,
@@ -132,7 +189,7 @@ class ServerManagerView {
 	}
 
 	activateTab(index, hideOldTab = true) {
-		if (this.tabs[index].loading) {
+		if (this.tabs[index].webview.loading) {
 			return;
 		}
 
@@ -146,10 +203,15 @@ class ServerManagerView {
 
 		this.activeTabIndex = index;
 		this.tabs[index].activate();
+
+		ipcRenderer.send('update-menu', {
+			tabs: this.tabs,
+			activeTabIndex: this.activeTabIndex
+		});
 	}
 
 	destroyTab(name, index) {
-		if (this.tabs[index].loading) {
+		if (this.tabs[index].webview.loading) {
 			return;
 		}
 
@@ -164,6 +226,25 @@ class ServerManagerView {
 		}
 	}
 
+	destroyView() {
+		// Clear global variables
+		this.activeTabIndex = -1;
+		this.tabs = [];
+		this.functionalTabs = {};
+
+		// Clear DOM elements
+		this.$tabsContainer.innerHTML = '';
+		this.$webviewsContainer.innerHTML = '';
+
+		// Destroy shortcuts
+		ipcRenderer.send('local-shortcuts', false);
+	}
+
+	reloadView() {
+		this.destroyView();
+		this.initTabs();
+	}
+
 	updateBadge() {
 		let messageCountAll = 0;
 		for (let i = 0; i < this.tabs.length; i++) {
@@ -175,6 +256,14 @@ class ServerManagerView {
 		}
 
 		ipcRenderer.send('update-badge', messageCountAll);
+	}
+
+	toggleSidebar(show) {
+		if (show) {
+			this.$sidebar.classList.remove('sidebar-hide');
+		} else {
+			this.$sidebar.classList.add('sidebar-hide');
+		}
 	}
 
 	registerIpcs() {
@@ -203,9 +292,71 @@ class ServerManagerView {
 		ipcRenderer.on('open-settings', (event, settingNav) => {
 			this.openSettings(settingNav);
 		});
+
 		ipcRenderer.on('open-about', this.openAbout.bind(this));
+
+		ipcRenderer.on('reload-viewer', this.reloadView.bind(this));
+
+		ipcRenderer.on('hard-reload', () => {
+			ipcRenderer.send('reload-full-app');
+		});
+
+		ipcRenderer.on('clear-app-data', () => {
+			ipcRenderer.send('clear-app-settings');
+		});
+
 		ipcRenderer.on('switch-server-tab', (event, index) => {
 			this.activateTab(index);
+		});
+
+		ipcRenderer.on('reload-proxy', (event, showAlert) => {
+			this.loadProxy().then(() => {
+				if (showAlert) {
+					alert('Proxy settings saved!');
+				}
+			});
+		});
+
+		ipcRenderer.on('toggle-sidebar', (event, show) => {
+			this.toggleSidebar(show);
+		});
+
+		ipcRenderer.on('enter-fullscreen', () => {
+			this.$fullscreenPopup.classList.add('show');
+			this.$fullscreenPopup.classList.remove('hidden');
+		});
+
+		ipcRenderer.on('leave-fullscreen', () => {
+			this.$fullscreenPopup.classList.remove('show');
+		});
+
+		ipcRenderer.on('render-taskbar-icon', (event, messageCount) => {
+			// Create a canvas from unread messagecounts
+			function createOverlayIcon(messageCount) {
+				const canvas = document.createElement('canvas');
+				canvas.height = 128;
+				canvas.width = 128;
+				canvas.style.letterSpacing = '-5px';
+				const ctx = canvas.getContext('2d');
+				ctx.fillStyle = '#f42020';
+				ctx.beginPath();
+				ctx.ellipse(64, 64, 64, 64, 0, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.textAlign = 'center';
+				ctx.fillStyle = 'white';
+				if (messageCount > 99) {
+					ctx.font = '65px Helvetica';
+					ctx.fillText('99+', 64, 85);
+				} else if (messageCount < 10) {
+					ctx.font = '90px Helvetica';
+					ctx.fillText(String(Math.min(99, messageCount)), 64, 96);
+				} else {
+					ctx.font = '85px Helvetica';
+					ctx.fillText(String(Math.min(99, messageCount)), 64, 90);
+				}
+				return canvas;
+			}
+			ipcRenderer.send('update-taskbar-icon', createOverlayIcon(messageCount).toDataURL(), String(messageCount));
 		});
 	}
 }
@@ -213,8 +364,8 @@ class ServerManagerView {
 window.onload = () => {
 	const serverManagerView = new ServerManagerView();
 	serverManagerView.init();
-};
 
-window.addEventListener('online', () => {
-	ipcRenderer.send('reload-main');
-});
+	window.addEventListener('online', () => {
+		serverManagerView.reloadView();
+	});
+};
