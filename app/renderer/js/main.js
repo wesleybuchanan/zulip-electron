@@ -1,10 +1,10 @@
 'use strict';
 
-require(__dirname + '/js/tray.js');
 const { ipcRenderer, remote } = require('electron');
 
 const { session } = remote;
 
+require(__dirname + '/js/tray.js');
 const DomainUtil = require(__dirname + '/js/utils/domain-util.js');
 const WebView = require(__dirname + '/js/components/webview.js');
 const ServerTab = require(__dirname + '/js/components/server-tab.js');
@@ -35,6 +35,7 @@ class ServerManagerView {
 		this.activeTabIndex = -1;
 		this.tabs = [];
 		this.functionalTabs = {};
+		this.tabIndex = 0;
 	}
 
 	init() {
@@ -43,6 +44,7 @@ class ServerManagerView {
 			this.initTabs();
 			this.initActions();
 			this.registerIpcs();
+			this.initDefaultSettings();
 		});
 	}
 
@@ -65,6 +67,39 @@ class ServerManagerView {
 		});
 	}
 
+	// Settings are initialized only when user clicks on General/Server/Network section settings
+	// In case, user doesn't visit these section, those values set to be null automatically
+	// This will make sure the default settings are correctly set to either true or false
+	initDefaultSettings() {
+		// Default settings which should be respected
+		const settingOptions = {
+			trayIcon: true,
+			useProxy: false,
+			showSidebar: true,
+			badgeOption: true,
+			startAtLogin: false,
+			startMinimized: false,
+			enableSpellchecker: true,
+			showNotification: true,
+			betaUpdate: false,
+			silent: false,
+			lastActiveTab: 0
+		};
+
+		// Platform specific settings
+
+		if (process.platform === 'win32') {
+			// Only available on Windows
+			settingOptions.flashTaskbarOnMessage = true;
+		}
+
+		for (const i in settingOptions) {
+			if (ConfigUtil.getConfigItem(i) === null) {
+				ConfigUtil.setConfigItem(i, settingOptions[i]);
+			}
+		}
+	}
+
 	initSidebar() {
 		const showSidebar = ConfigUtil.getConfigItem('showSidebar', true);
 		this.toggleSidebar(showSidebar);
@@ -83,21 +118,23 @@ class ServerManagerView {
 		} else {
 			this.openSettings('Servers');
 		}
-		ipcRenderer.send('local-shortcuts', true);
 	}
 
 	initServer(server, index) {
+		const tabIndex = this.getTabIndex();
 		this.tabs.push(new ServerTab({
 			role: 'server',
 			icon: server.icon,
 			$root: this.$tabsContainer,
 			onClick: this.activateLastTab.bind(this, index),
 			index,
+			tabIndex,
 			onHover: this.onHover.bind(this, index, server.alias),
 			onHoverOut: this.onHoverOut.bind(this, index),
 			webview: new WebView({
 				$root: this.$webviewsContainer,
 				index,
+				tabIndex,
 				url: server.url,
 				name: server.alias,
 				isActive: () => {
@@ -122,9 +159,22 @@ class ServerManagerView {
 			this.openSettings('General');
 		});
 
+		const $serverImgs = document.querySelectorAll('.server-icons');
+		$serverImgs.forEach($serverImg => {
+			$serverImg.addEventListener('error', () => {
+				$serverImg.src = 'img/icon.png';
+			});
+		});
+
 		this.sidebarHoverEvent(this.$addServerButton, this.$addServerTooltip);
 		this.sidebarHoverEvent(this.$settingsButton, this.$settingsTooltip);
 		this.sidebarHoverEvent(this.$reloadButton, this.$reloadTooltip);
+	}
+
+	getTabIndex() {
+		const currentIndex = this.tabIndex;
+		this.tabIndex++;
+		return currentIndex;
 	}
 
 	sidebarHoverEvent(SidebarButton, SidebarTooltip) {
@@ -153,16 +203,19 @@ class ServerManagerView {
 
 		this.functionalTabs[tabProps.name] = this.tabs.length;
 
+		const tabIndex = this.getTabIndex();
 		this.tabs.push(new FunctionalTab({
 			role: 'function',
 			materialIcon: tabProps.materialIcon,
 			$root: this.$tabsContainer,
 			index: this.functionalTabs[tabProps.name],
+			tabIndex,
 			onClick: this.activateTab.bind(this, this.functionalTabs[tabProps.name]),
 			onDestroy: this.destroyTab.bind(this, tabProps.name, this.functionalTabs[tabProps.name]),
 			webview: new WebView({
 				$root: this.$webviewsContainer,
 				index: this.functionalTabs[tabProps.name],
+				tabIndex,
 				url: tabProps.url,
 				name: tabProps.name,
 				isActive: () => {
@@ -230,6 +283,27 @@ class ServerManagerView {
 			tabs: this.tabs,
 			activeTabIndex: this.activeTabIndex
 		});
+
+		ipcRenderer.on('toggle-sidebar', (event, state) => {
+			const selector = 'webview:not([class*=disabled])';
+			const webview = document.querySelector(selector);
+			const webContents = webview.getWebContents();
+			webContents.send('toggle-sidebar', state);
+		});
+
+		ipcRenderer.on('toogle-silent', (event, state) => {
+			const webviews = document.querySelectorAll('webview');
+			webviews.forEach(webview => {
+				try {
+					webview.setAudioMuted(state);
+				} catch (err) {
+					// webview is not ready yet
+					webview.addEventListener('dom-ready', () => {
+						webview.isAudioMuted();
+					});
+				}
+			});
+		});
 	}
 
 	destroyTab(name, index) {
@@ -257,9 +331,6 @@ class ServerManagerView {
 		// Clear DOM elements
 		this.$tabsContainer.innerHTML = '';
 		this.$webviewsContainer.innerHTML = '';
-
-		// Destroy shortcuts
-		ipcRenderer.send('local-shortcuts', false);
 	}
 
 	reloadView() {
@@ -363,6 +434,18 @@ class ServerManagerView {
 
 		ipcRenderer.on('leave-fullscreen', () => {
 			this.$fullscreenPopup.classList.remove('show');
+		});
+
+		ipcRenderer.on('focus-webview-with-id', (event, webviewId) => {
+			const webviews = document.querySelectorAll('webview');
+			webviews.forEach(webview => {
+				const currentId = webview.getWebContents().id;
+				const tabId = webview.getAttribute('data-tab-id');
+				const concurrentTab = document.querySelector(`div[data-tab-id="${tabId}"]`);
+				if (currentId === webviewId) {
+					concurrentTab.click();
+				}
+			});
 		});
 
 		ipcRenderer.on('render-taskbar-icon', (event, messageCount) => {

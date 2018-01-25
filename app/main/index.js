@@ -1,8 +1,8 @@
 'use strict';
 const path = require('path');
 const electron = require('electron');
-const electronLocalshortcut = require('electron-localshortcut');
 const windowStateKeeper = require('electron-window-state');
+const isDev = require('electron-is-dev');
 const appMenu = require('./menu');
 const { appUpdater } = require('./autoupdater');
 const { crashHandler } = require('./crash-reporter');
@@ -12,9 +12,13 @@ const { setAutoLaunch } = require('./startup');
 const { app, ipcMain } = electron;
 
 const BadgeSettings = require('./../renderer/js/pages/preference/badge-settings.js');
+const ConfigUtil = require('./../renderer/js/utils/config-util.js');
 
 // Adds debug features like hotkeys for triggering dev tools and reload
-require('electron-debug')();
+// in development mode
+if (isDev) {
+	require('electron-debug')();
+}
 
 // Prevent window being garbage collected
 let mainWindow;
@@ -63,8 +67,8 @@ function createMainWindow() {
 		y: mainWindowState.y,
 		width: mainWindowState.width,
 		height: mainWindowState.height,
-		minWidth: 600,
-		minHeight: 500,
+		minWidth: 300,
+		minHeight: 400,
 		webPreferences: {
 			plugins: true,
 			allowDisplayingInsecureContent: true,
@@ -78,7 +82,11 @@ function createMainWindow() {
 	});
 
 	win.once('ready-to-show', () => {
-		win.show();
+		if (ConfigUtil.getConfigItem('startMinimized')) {
+			win.minimize();
+		} else {
+			win.show();
+		}
 	});
 
 	win.loadURL(mainURL);
@@ -94,9 +102,6 @@ function createMainWindow() {
 				win.hide();
 			}
 		}
-
-		// Unregister all the shortcuts so that they don't interfare with other apps
-		electronLocalshortcut.unregisterAll(mainWindow);
 	});
 
 	win.setTitle('Zulip');
@@ -124,31 +129,13 @@ function createMainWindow() {
 	return win;
 }
 
-function registerLocalShortcuts(page) {
-	// Somehow, reload action cannot be overwritten by the menu item
-	electronLocalshortcut.register(mainWindow, 'CommandOrControl+R', () => {
-		page.send('reload-current-viewer');
-	});
-
-	// Also adding these shortcuts because some users might want to use it instead of CMD/Left-Right
-	electronLocalshortcut.register(mainWindow, 'CommandOrControl+[', () => {
-		page.send('back');
-	});
-
-	electronLocalshortcut.register(mainWindow, 'CommandOrControl+]', () => {
-		page.send('forward');
-	});
-}
+// Decrease load on GPU (experimental)
+app.disableHardwareAcceleration();
 
 // eslint-disable-next-line max-params
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
 	event.preventDefault();
 	callback(true);
-});
-
-app.on('window-all-closed', () => {
-	// Unregister all the shortcuts so that they don't interfare with other apps
-	electronLocalshortcut.unregisterAll(mainWindow);
 });
 
 app.on('activate', () => {
@@ -165,10 +152,12 @@ app.on('ready', () => {
 
 	const page = mainWindow.webContents;
 
-	registerLocalShortcuts(page);
-
 	page.on('dom-ready', () => {
-		mainWindow.show();
+		if (ConfigUtil.getConfigItem('startMinimized')) {
+			mainWindow.minimize();
+		} else {
+			mainWindow.show();
+		}
 	});
 
 	page.once('did-frame-finish-load', () => {
@@ -178,7 +167,8 @@ app.on('ready', () => {
 	});
 
 	electron.powerMonitor.on('resume', () => {
-		page.send('reload-viewer');
+		mainWindow.reload();
+		page.send('destroytray');
 	});
 
 	ipcMain.on('focus-app', () => {
@@ -232,28 +222,13 @@ app.on('ready', () => {
 	});
 
 	ipcMain.on('register-server-tab-shortcut', (event, index) => {
-		electronLocalshortcut.register(mainWindow, `CommandOrControl+${index}`, () => {
-			// Array index == Shown index - 1
-			page.send('switch-server-tab', index - 1);
-		});
-	});
-
-	ipcMain.on('local-shortcuts', (event, enable) => {
-		if (enable) {
-			registerLocalShortcuts(page);
-		} else {
-			electronLocalshortcut.unregisterAll(mainWindow);
-		}
+		// Array index == Shown index - 1
+		page.send('switch-server-tab', index - 1);
 	});
 
 	ipcMain.on('toggleAutoLauncher', (event, AutoLaunchValue) => {
 		setAutoLaunch(AutoLaunchValue);
 	});
-});
-
-app.on('will-quit', () => {
-	// Unregister all the shortcuts so that they don't interfare with other apps
-	electronLocalshortcut.unregisterAll(mainWindow);
 });
 
 app.on('before-quit', () => {

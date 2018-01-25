@@ -5,6 +5,12 @@ const fs = require('fs');
 const path = require('path');
 const JsonDB = require('node-json-db');
 const request = require('request');
+const Logger = require('./logger-util');
+
+const logger = new Logger({
+	file: `domain-util.log`,
+	timestamp: true
+});
 
 let instance = null;
 
@@ -115,14 +121,23 @@ class DomainUtil {
 						'Error: unable to verify the first certificate',
 						'Error: unable to get local issuer certificate'
 					];
-				if (!error && response.statusCode !== 404) {
+
+				// If the domain contains following strings we just bypass the server
+				const whitelistDomains = [
+					'zulipdev.org'
+				];
+
+				// make sure that error is a error or string not undefined
+				// so validation does not throw error.
+				error = error || '';
+				if (!error && response.statusCode < 400) {
 					// Correct
 					this.getServerSettings(domain).then(serverSettings => {
 						resolve(serverSettings);
 					}, () => {
 						resolve(serverConf);
 					});
-				} else if (certsError.indexOf(error.toString()) >= 0) {
+				} else if (domain.indexOf(whitelistDomains) >= 0 || certsError.indexOf(error.toString()) >= 0) {
 					if (silent) {
 						this.getServerSettings(domain).then(serverSettings => {
 							resolve(serverSettings);
@@ -155,7 +170,7 @@ class DomainUtil {
 					}
 				} else {
 					const invalidZulipServerError = `${domain} does not appear to be a valid Zulip server. Make sure that \
-					(1) you can connect to that URL in a web browser and \n (2) if you need a proxy to connect to the Internet, that you've configured your proxy in the Network settings`;
+					\n(1) you can connect to that URL in a web browser and \n (2) if you need a proxy to connect to the Internet, that you've configured your proxy in the Network settings \n (3) its a zulip server`;
 					reject(invalidZulipServerError);
 				}
 			});
@@ -221,7 +236,23 @@ class DomainUtil {
 	}
 
 	reloadDB() {
-		this.db = new JsonDB(app.getPath('userData') + '/domain.json', true, true);
+		const domainJsonPath = path.join(app.getPath('userData'), '/domain.json');
+		try {
+			const file = fs.readFileSync(domainJsonPath, 'utf8');
+			JSON.parse(file);
+		} catch (err) {
+			if (fs.existsSync(domainJsonPath)) {
+				fs.unlinkSync(domainJsonPath);
+				dialog.showErrorBox(
+					'Error saving new organization',
+					'There seems to be error while saving new organization, ' +
+					'you may have to re-add your previous organizations back.'
+				);
+				logger.error('Error while JSON parsing domain.json: ');
+				logger.error(err);
+			}
+		}
+		this.db = new JsonDB(domainJsonPath, true, true);
 	}
 
 	generateFilePath(url) {

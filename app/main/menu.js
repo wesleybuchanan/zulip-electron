@@ -54,7 +54,7 @@ class AppMenu {
 			role: 'togglefullscreen'
 		}, {
 			label: 'Zoom In',
-			accelerator: 'CommandOrControl+=',
+			accelerator: 'CommandOrControl+Plus',
 			click(item, focusedWindow) {
 				if (focusedWindow) {
 					AppMenu.sendAction('zoomIn');
@@ -121,7 +121,7 @@ class AppMenu {
 				shell.openExternal('https://zulipchat.com/help/');
 			}
 		}, {
-			label: `${appName + 'Desktop'} - ${app.getVersion()}`,
+			label: `${appName + ' Desktop'} - ${app.getVersion()}`,
 			enabled: false
 		}, {
 			label: 'Report an Issue...',

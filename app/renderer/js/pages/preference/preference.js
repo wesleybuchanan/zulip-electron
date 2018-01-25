@@ -3,8 +3,6 @@
 const BaseComponent = require(__dirname + '/js/components/base.js');
 const { ipcRenderer } = require('electron');
 
-const ConfigUtil = require(__dirname + '/js/utils/config-util.js');
-
 const Nav = require(__dirname + '/js/pages/preference/nav.js');
 const ServersSection = require(__dirname + '/js/pages/preference/servers-section.js');
 const GeneralSection = require(__dirname + '/js/pages/preference/general-section.js');
@@ -96,9 +94,26 @@ class PreferenceView extends BaseComponent {
 		window.location.hash = `#${navItem}`;
 	}
 
+	// Handle toggling and reflect changes in preference page
+	handleToggle(elementName, state) {
+		const inputSelector = `#${elementName} .action .switch input`;
+		const input = document.querySelector(inputSelector);
+		if (input) {
+			input.checked = state;
+		}
+	}
+
 	registerIpcs() {
 		ipcRenderer.on('switch-settings-nav', (event, navItem) => {
 			this.handleNavigation(navItem);
+		});
+
+		ipcRenderer.on('toggle-sidebar', (event, state) => {
+			this.handleToggle('sidebar-option', state);
+		});
+
+		ipcRenderer.on('toggletray', (event, state) => {
+			this.handleToggle('tray-option', state);
 		});
 	}
 }

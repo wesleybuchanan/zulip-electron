@@ -1,11 +1,10 @@
 'use strict';
 const path = require('path');
-
-const { ipcRenderer } = require('electron');
-const { app, dialog } = require('electron').remote;
-
+const { ipcRenderer, remote } = require('electron');
 const fs = require('fs-extra');
 
+const { app, dialog } = remote;
+const currentBrowserWindow = remote.getCurrentWindow();
 const BaseSection = require(__dirname + '/base-section.js');
 const ConfigUtil = require(__dirname + '/../../utils/config-util.js');
 
@@ -61,10 +60,14 @@ class GeneralSection extends BaseSection {
 						<div class="setting-description">Start app at login</div>
 						<div class="setting-control"></div>
 					</div>
+					<div class="setting-row" id="start-minimize-option">
+						<div class="setting-description">Always start minimized</div>
+						<div class="setting-control"></div>
+					</div>
 					<div class="setting-row" id="enable-spellchecker-option">
-					<div class="setting-description">Enable Spellchecker (requires restart)</div>
-					<div class="setting-control"></div>
-				</div>
+						<div class="setting-description">Enable Spellchecker (requires restart)</div>
+						<div class="setting-control"></div>
+					</div>
 				</div>
 				<div class="title">Reset Application Data</div>
                 <div class="settings-card">
@@ -89,6 +92,7 @@ class GeneralSection extends BaseSection {
 		this.updateResetDataOption();
 		this.showDesktopNotification();
 		this.enableSpellchecker();
+		this.minimizeOnStart();
 
 		// Platform specific settings
 		// Flashing taskbar on Windows
@@ -155,6 +159,7 @@ class GeneralSection extends BaseSection {
 				const newValue = !ConfigUtil.getConfigItem('silent', true);
 				ConfigUtil.setConfigItem('silent', newValue);
 				this.updateSilentOption();
+				currentBrowserWindow.send('toogle-silent', newValue);
 			}
 		});
 	}
@@ -231,6 +236,18 @@ class GeneralSection extends BaseSection {
 		const resetDataButton = document.querySelector('#resetdata-option .reset-data-button');
 		resetDataButton.addEventListener('click', () => {
 			this.clearAppDataDialog();
+		});
+	}
+
+	minimizeOnStart() {
+		this.generateSettingOption({
+			$element: document.querySelector('#start-minimize-option .setting-control'),
+			value: ConfigUtil.getConfigItem('startMinimized', false),
+			clickHandler: () => {
+				const newValue = !ConfigUtil.getConfigItem('startMinimized');
+				ConfigUtil.setConfigItem('startMinimized', newValue);
+				this.minimizeOnStart();
+			}
 		});
 	}
 

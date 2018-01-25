@@ -13,12 +13,13 @@ class NewServerForm extends BaseComponent {
 		return `
 			<div class="settings-card">
 				<div class="server-info-right">
+					<div class="title">URL of Zulip organization</div>
 					<div class="server-info-row">
-						<input class="setting-input-value" autofocus placeholder="Enter the URL of your Zulip organization..."/>
+						<input class="setting-input-value" autofocus placeholder="your-organization.zulipchat.com or chat.your-organization.com"/>
 					</div>
 					<div class="server-info-row">
 						<div class="action blue server-save-action">
-							<i class="material-icons">check_box</i>
+							<i class="material-icons">add_box</i>
 							<span>Add</span>
 						</div>
 					</div>
