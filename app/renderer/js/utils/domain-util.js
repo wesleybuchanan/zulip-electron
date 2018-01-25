@@ -110,8 +110,10 @@ class DomainUtil {
 		return new Promise((resolve, reject) => {
 			request(checkDomain, (error, response) => {
 				const certsError =
-					['Error: self signed certificate',
-						'Error: unable to verify the first certificate'
+					[
+						'Error: self signed certificate',
+						'Error: unable to verify the first certificate',
+						'Error: unable to get local issuer certificate'
 					];
 				if (!error && response.statusCode !== 404) {
 					// Correct
@@ -152,7 +154,9 @@ class DomainUtil {
 						});
 					}
 				} else {
-					reject('Not a valid Zulip server');
+					const invalidZulipServerError = `${domain} does not appear to be a valid Zulip server. Make sure that \
+					(1) you can connect to that URL in a web browser and \n (2) if you need a proxy to connect to the Internet, that you've configured your proxy in the Network settings`;
+					reject(invalidZulipServerError);
 				}
 			});
 		});
@@ -166,7 +170,9 @@ class DomainUtil {
 					const data = JSON.parse(response.body);
 					if (data.hasOwnProperty('realm_icon') && data.realm_icon) {
 						resolve({
-							icon: data.realm_uri + data.realm_icon,
+							// Some Zulip Servers use absolute URL for server icon whereas others use relative URL
+							// Following check handles both the cases
+							icon: data.realm_icon.startsWith('/') ? data.realm_uri + data.realm_icon : data.realm_icon,
 							url: data.realm_uri,
 							alias: data.realm_name
 						});

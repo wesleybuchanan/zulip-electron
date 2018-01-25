@@ -29,9 +29,13 @@ class GeneralSection extends BaseSection {
 						<div class="setting-control"></div>
 					</div>
 					<div class="setting-row" id="badge-option">
-					<div class="setting-description">Show app unread badge</div>
-					<div class="setting-control"></div>
-				</div>
+						<div class="setting-description">Show app unread badge</div>
+						<div class="setting-control"></div>
+					</div>
+					<div class="setting-row" id="flash-taskbar-option" style= "display:${process.platform === 'win32' ? '' : 'none'}">
+						<div class="setting-description">Flash taskbar on new message</div>
+						<div class="setting-control"></div>
+					</div>
 				</div>
 				<div class="title">Desktop Notification</div>
 				<div class="settings-card">
@@ -57,6 +61,10 @@ class GeneralSection extends BaseSection {
 						<div class="setting-description">Start app at login</div>
 						<div class="setting-control"></div>
 					</div>
+					<div class="setting-row" id="enable-spellchecker-option">
+					<div class="setting-description">Enable Spellchecker (requires restart)</div>
+					<div class="setting-control"></div>
+				</div>
 				</div>
 				<div class="title">Reset Application Data</div>
                 <div class="settings-card">
@@ -74,12 +82,19 @@ class GeneralSection extends BaseSection {
 		this.props.$root.innerHTML = this.template();
 		this.updateTrayOption();
 		this.updateBadgeOption();
-		this.updateUpdateOption();
 		this.updateSilentOption();
+		this.updateUpdateOption();
 		this.updateSidebarOption();
 		this.updateStartAtLoginOption();
 		this.updateResetDataOption();
 		this.showDesktopNotification();
+		this.enableSpellchecker();
+
+		// Platform specific settings
+		// Flashing taskbar on Windows
+		if (process.platform === 'win32') {
+			this.updateFlashTaskbar();
+		}
 	}
 
 	updateTrayOption() {
@@ -104,6 +119,18 @@ class GeneralSection extends BaseSection {
 				ConfigUtil.setConfigItem('badgeOption', newValue);
 				ipcRenderer.send('toggle-badge-option', newValue);
 				this.updateBadgeOption();
+			}
+		});
+	}
+
+	updateFlashTaskbar() {
+		this.generateSettingOption({
+			$element: document.querySelector('#flash-taskbar-option .setting-control'),
+			value: ConfigUtil.getConfigItem('flashTaskbarOnMessage', true),
+			clickHandler: () => {
+				const newValue = !ConfigUtil.getConfigItem('flashTaskbarOnMessage');
+				ConfigUtil.setConfigItem('flashTaskbarOnMessage', newValue);
+				this.updateFlashTaskbar();
 			}
 		});
 	}
@@ -166,6 +193,18 @@ class GeneralSection extends BaseSection {
 				ConfigUtil.setConfigItem('startAtLogin', newValue);
 				ipcRenderer.send('toggleAutoLauncher', newValue);
 				this.updateStartAtLoginOption();
+			}
+		});
+	}
+
+	enableSpellchecker() {
+		this.generateSettingOption({
+			$element: document.querySelector('#enable-spellchecker-option .setting-control'),
+			value: ConfigUtil.getConfigItem('enableSpellchecker', true),
+			clickHandler: () => {
+				const newValue = !ConfigUtil.getConfigItem('enableSpellchecker');
+				ConfigUtil.setConfigItem('enableSpellchecker', newValue);
+				this.enableSpellchecker();
 			}
 		});
 	}

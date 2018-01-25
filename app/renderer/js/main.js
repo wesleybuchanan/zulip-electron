@@ -21,8 +21,11 @@ class ServerManagerView {
 		this.$settingsButton = $actionsContainer.querySelector('#settings-action');
 		this.$webviewsContainer = document.getElementById('webviews-container');
 
+		this.$addServerTooltip = document.getElementById('add-server-tooltip');
 		this.$reloadTooltip = $actionsContainer.querySelector('#reload-tooltip');
 		this.$settingsTooltip = $actionsContainer.querySelector('#setting-tooltip');
+		this.$serverIconTooltip = document.getElementsByClassName('server-tooltip');
+
 		this.$sidebar = document.getElementById('sidebar');
 
 		this.$fullscreenPopup = document.getElementById('fullscreen-popup');
@@ -75,11 +78,11 @@ class ServerManagerView {
 				DomainUtil.updateSavedServer(servers[i].url, i);
 				this.activateTab(i);
 			}
-			this.activateTab(0);
+			// Open last active tab
+			this.activateTab(ConfigUtil.getConfigItem('lastActiveTab'));
 		} else {
 			this.openSettings('Servers');
 		}
-
 		ipcRenderer.send('local-shortcuts', true);
 	}
 
@@ -88,8 +91,10 @@ class ServerManagerView {
 			role: 'server',
 			icon: server.icon,
 			$root: this.$tabsContainer,
-			onClick: this.activateTab.bind(this, index),
+			onClick: this.activateLastTab.bind(this, index),
 			index,
+			onHover: this.onHover.bind(this, index, server.alias),
+			onHoverOut: this.onHoverOut.bind(this, index),
 			webview: new WebView({
 				$root: this.$webviewsContainer,
 				index,
@@ -117,6 +122,7 @@ class ServerManagerView {
 			this.openSettings('General');
 		});
 
+		this.sidebarHoverEvent(this.$addServerButton, this.$addServerTooltip);
 		this.sidebarHoverEvent(this.$settingsButton, this.$settingsTooltip);
 		this.sidebarHoverEvent(this.$reloadButton, this.$reloadTooltip);
 	}
@@ -128,6 +134,15 @@ class ServerManagerView {
 		SidebarButton.addEventListener('mouseout', () => {
 			SidebarTooltip.style.display = 'none';
 		});
+	}
+
+	onHover(index, serverName) {
+		this.$serverIconTooltip[index].innerHTML = serverName;
+		this.$serverIconTooltip[index].removeAttribute('style');
+	}
+
+	onHoverOut(index) {
+		this.$serverIconTooltip[index].style.display = 'none';
 	}
 
 	openFunctionalTab(tabProps) {
@@ -188,8 +203,15 @@ class ServerManagerView {
 		});
 	}
 
+	activateLastTab(index) {
+		// Open last active tab
+		ConfigUtil.setConfigItem('lastActiveTab', index);
+		// Open all the tabs in background
+		this.activateTab(index);
+	}
+
 	activateTab(index, hideOldTab = true) {
-		if (this.tabs[index].webview.loading) {
+		if (!this.tabs[index]) {
 			return;
 		}
 
@@ -241,8 +263,19 @@ class ServerManagerView {
 	}
 
 	reloadView() {
+		// Save and remember the index of last active tab so that we can use it later
+		const lastActiveTab = this.tabs[this.activeTabIndex].props.index;
+		ConfigUtil.setConfigItem('lastActiveTab', lastActiveTab);
+
+		// Destroy the current view and re-initiate it
 		this.destroyView();
 		this.initTabs();
+	}
+
+	// This will trigger when pressed CTRL/CMD + R [WIP]
+	// It won't reload the current view properly when you add/delete a server.
+	reloadCurrentView() {
+		this.$reloadButton.click();
 	}
 
 	updateBadge() {
@@ -295,7 +328,9 @@ class ServerManagerView {
 
 		ipcRenderer.on('open-about', this.openAbout.bind(this));
 
-		ipcRenderer.on('reload-viewer', this.reloadView.bind(this));
+		ipcRenderer.on('reload-viewer', this.reloadView.bind(this, this.tabs[this.activeTabIndex].props.index));
+
+		ipcRenderer.on('reload-current-viewer', this.reloadCurrentView.bind(this));
 
 		ipcRenderer.on('hard-reload', () => {
 			ipcRenderer.send('reload-full-app');

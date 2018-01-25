@@ -37,7 +37,7 @@ class AppMenu {
 			accelerator: 'CommandOrControl+R',
 			click(item, focusedWindow) {
 				if (focusedWindow) {
-					AppMenu.sendAction('reload-viewer');
+					AppMenu.sendAction('reload-current-viewer');
 				}
 			}
 		}, {
@@ -173,7 +173,7 @@ class AppMenu {
 		return [{
 			label: `${app.getName()}`,
 			submenu: [{
-				label: 'Zulip Desktop',
+				label: 'About Zulip',
 				click(item, focusedWindow) {
 					if (focusedWindow) {
 						AppMenu.sendAction('open-about');
@@ -273,7 +273,7 @@ class AppMenu {
 		return [{
 			label: 'File',
 			submenu: [{
-				label: 'Zulip Desktop',
+				label: 'About Zulip',
 				click(item, focusedWindow) {
 					if (focusedWindow) {
 						AppMenu.sendAction('open-about');
@@ -370,10 +370,20 @@ class AppMenu {
 	}
 
 	static resetAppSettings() {
-		const getAppPath = path.join(app.getPath('appData'), appName, 'window-state.json');
+		// We save App's settings/configurations in following files
+		const settingFiles = ['window-state.json', 'domain.json', 'settings.json'];
 
-		fs.unlink(getAppPath, () => {
-			setTimeout(() => AppMenu.sendAction('clear-app-data'), 1000);
+		settingFiles.forEach(settingFileName => {
+			const getSettingFilesPath = path.join(app.getPath('appData'), appName, settingFileName);
+			fs.access(getSettingFilesPath, error => {
+				if (error) {
+					console.log(error);
+				} else {
+					fs.unlink(getSettingFilesPath, () => {
+						AppMenu.sendAction('clear-app-data');
+					});
+				}
+			});
 		});
 	}
 
